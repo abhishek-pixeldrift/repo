@@ -1,7 +1,8 @@
 import os
 import json
-import requests
 import streamlit as st
+from google import genai
+from google.genai import types
 
 # ----------------------------------------------------
 # 1. PAGE SETUP
@@ -9,14 +10,20 @@ import streamlit as st
 st.set_page_config(page_title="PrivaGuard | Data Leak Shield", page_icon="🛡️", layout="wide")
 
 st.title("🛡️ PrivaGuard: Edge Privacy Shield")
-st.caption("Powered by Google AI Studio & Gemma 4 26B (REST API Bypass)")
+st.caption("Powered by Google AI Studio & Gemma 4 26B")
 
 # Securely retrieve API Key
-api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
+raw_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
 
-if not api_key:
+if not raw_key:
     st.error("⚠️ API Key missing! Please add `GEMINI_API_KEY` to your Streamlit Secrets.")
     st.stop()
+
+# THE FIX: Strip out any hidden line breaks, spaces, or formatting from the copy-paste
+api_key = raw_key.strip().replace("\n", "").replace("\r", "").replace(" ", "")
+
+# Initialize the GenAI Client
+client = genai.Client(api_key=api_key)
 
 # ----------------------------------------------------
 # 2. SYSTEM PROMPT (THE AI BRAIN)
@@ -60,34 +67,29 @@ if st.button("🔍 Scan for Privacy Leaks", type="primary"):
     else:
         with st.spinner("Gemma 4 is analyzing for PII and compliance risks..."):
             try:
-                # Bypass the SDK bug by using a direct REST API call
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemma-4-26b-a4b-it:generateContent?key={api_key}"
-                headers = {"Content-Type": "application/json"}
-                
-                # Format the JSON payload manually
-                payload = {
-                    "systemInstruction": {
-                        "parts": [{"text": privacy_system_instruction}]
-                    },
-                    "contents": [
-                        {"role": "user", "parts": [{"text": user_input}]}
-                    ],
-                    "generationConfig": {
-                        "temperature": 0.2
-                    }
-                }
+                # Build request payload
+                contents = [
+                    types.Content(
+                        role="user",
+                        parts=[types.Part.from_text(text=user_input)],
+                    ),
+                ]
 
-                # Make the request
-                response = requests.post(url, headers=headers, json=payload)
-                response_data = response.json()
+                # Inject System Prompt & enforce low temperature for strict JSON
+                generate_content_config = types.GenerateContentConfig(
+                    system_instruction=privacy_system_instruction,
+                    temperature=0.2, 
+                )
 
-                if "error" in response_data:
-                    st.error(f"API Error: {response_data['error']['message']}")
-                    st.stop()
+                # Fetch response from Gemma
+                response = client.models.generate_content(
+                    model="gemma-4-26b-a4b-it",
+                    contents=contents,
+                    config=generate_content_config,
+                )
 
-                # Extract the text from the response payload
-                raw_text = response_data["candidates"][0]["content"]["parts"][0]["text"]
-                clean_text = raw_text.replace("```json", "").replace("```", "").strip()
+                # Clean the response to ensure it's valid JSON
+                clean_text = response.text.replace("```json", "").replace("```", "").strip()
                 
                 # Convert the text into a Python Dictionary
                 data = json.loads(clean_text)
@@ -130,5 +132,6 @@ if st.button("🔍 Scan for Privacy Leaks", type="primary"):
 
             except json.JSONDecodeError:
                 st.error("❌ Failed to parse Gemma's response into JSON. The model returned plain text instead.")
+                st.write("Raw Output:", response.text)
             except Exception as e:
-                st.error(f"An error occurred: {e}")
+                st.error(f"An error occurred while calling Gemma 4: {e}")
