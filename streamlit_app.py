@@ -6,11 +6,10 @@ from google import genai
 from google.genai import types
 
 # ----------------------------------------------------
-# 1. PAGE SETUP & CUSTOM CSS FOR SAAS LOOK
+# 1. PAGE SETUP & SLEEK SAAS CSS
 # ----------------------------------------------------
 st.set_page_config(page_title="PrivaGuard | Data Leak Shield", page_icon="🛡️", layout="wide")
 
-# Custom CSS styling for dark mode cybersecurity UI
 st.markdown("""
 <style>
     /* Metric Cards */
@@ -61,24 +60,32 @@ st.markdown("""
         font-size: 0.95rem;
     }
 
-    /* Redacted Output Box */
+    /* --- SLEEK REDACTED TEXT BOX (FIXED) --- */
     .redacted-box {
         background-color: #0d1117;
         border: 1px solid #30363d;
-        border-radius: 8px;
-        padding: 16px;
-        font-family: monospace;
-        color: #c9d1d9;
-        line-height: 1.6;
-        white-space: pre-wrap;
+        border-radius: 10px;
+        padding: 20px;
+        color: #e6edf3;
+        font-size: 1.05rem;
+        line-height: 2.2; /* Spacing out lines for pill badges */
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
     }
+
+    /* Modern Security Pill Badge */
     mark.redact {
-        background-color: rgba(248, 81, 73, 0.2);
+        background: linear-gradient(135deg, #3d1b20 0%, #220f12 100%);
         color: #ff7b72;
-        border: 1px solid #f85149;
-        padding: 1px 6px;
-        border-radius: 4px;
+        border: 1px solid #6e272d;
+        padding: 4px 12px;
+        border-radius: 20px; /* Rounded pill style */
         font-weight: 600;
+        font-size: 0.8rem;
+        letter-spacing: 0.5px;
+        display: inline-flex;
+        align-items: center;
+        margin: 0 3px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     }
 
     /* Warning Callouts */
@@ -104,7 +111,7 @@ if not raw_key:
     st.error("⚠️ API Key missing! Please add `GEMINI_API_KEY` to your Streamlit Secrets.")
     st.stop()
 
-# Strip accidental line breaks/spaces from API Key
+# Clean key
 api_key = raw_key.strip().replace("\n", "").replace("\r", "").replace(" ", "")
 client = genai.Client(api_key=api_key)
 
@@ -165,7 +172,6 @@ if st.button("🔍 Run Privacy Audit", type="primary", use_container_width=True)
                     config=generate_content_config,
                 )
 
-                # Clean response
                 clean_text = response.text.replace("```json", "").replace("```", "").strip()
                 data = json.loads(clean_text)
 
@@ -203,7 +209,7 @@ if st.button("🔍 Run Privacy Audit", type="primary", use_container_width=True)
                     </div>
                     """, unsafe_allow_html=True)
 
-                st.write("") # Spacer
+                st.write("") 
 
                 # --- 🎨 DETAILS GRID LAYOUT ---
                 col_left, col_right = st.columns([1, 1], gap="medium")
@@ -211,13 +217,14 @@ if st.button("🔍 Run Privacy Audit", type="primary", use_container_width=True)
                 with col_left:
                     st.subheader("🛡️ Sanitized Text (Redacted Output)")
                     
-                    # Highlight [REDACTED_...] tags in red badges dynamically
+                    # DYNAMIC CLEANER: Converts [REDACTED_ACCOUNT_NUMBER] -> 🔒 ACCOUNT NUMBER pill badge
                     redacted_raw = data.get("redacted_text", "")
-                    styled_redacted = re.sub(
-                        r'(\[REDACTED_[A-Z_]+\])', 
-                        r'<mark class="redact">\1</mark>', 
-                        redacted_raw
-                    )
+                    
+                    def make_badge(match):
+                        tag_name = match.group(1).replace("[REDACTED_", "").replace("]", "").replace("_", " ")
+                        return f'<mark class="redact">🔒 {tag_name}</mark>'
+                    
+                    styled_redacted = re.sub(r'(\[REDACTED_[A-Z_]+\])', make_badge, redacted_raw)
                     
                     st.markdown(f'<div class="redacted-box">{styled_redacted}</div>', unsafe_allow_html=True)
 
